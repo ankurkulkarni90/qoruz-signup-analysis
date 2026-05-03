@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Qoruz Signup Audit</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1a1a2e;
+    --ink-light: #3d3d5c;
+    --ink-muted: #6b6b8a;
+    --bg: #faf9f7;
+    --bg-warm: #f5f3ef;
+    --accent-red: #c23b22;
+    --accent-blue: #2563eb;
+    --accent-amber: #d97706;
+    --border: #e5e2dc;
+    --border-light: #eeebe5;
+    --serif: 'Instrument Serif', Georgia, 'Times New Roman', serif;
+    --sans: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    --mono: 'JetBrains Mono', 'Menlo', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.7;
+    color: var(--ink);
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 720px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 80px 40px;
+  }
+
+  /* ---- HEADER ---- */
+  .header {
+    margin-bottom: 48px;
+  }
+
+  .header .label {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin-bottom: 16px;
+  }
+
+  .header h1 {
+    font-family: var(--serif);
+    font-size: 48px;
+    font-weight: 400;
+    line-height: 1.15;
+    color: var(--ink);
+    margin-bottom: 20px;
+  }
+
+  .header .subtitle {
+    font-size: 17px;
+    color: var(--ink-light);
+    line-height: 1.7;
+    max-width: 580px;
+  }
+
+  .header .meta {
+    display: flex;
+    gap: 24px;
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+  }
+
+  .header .meta span {
+    font-size: 14px;
+    color: var(--ink-muted);
+  }
+
+  .header .meta span strong {
+    color: var(--ink-light);
+    font-weight: 500;
+  }
+
+  /* ---- FINDINGS ---- */
+  .findings {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 32px 36px;
+    margin-bottom: 32px;
+  }
+
+  .findings-title {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin-bottom: 20px;
+  }
+
+  .finding-item {
+    display: flex;
+    gap: 16px;
+    align-items: baseline;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .finding-item:last-child { border-bottom: none; }
+
+  .finding-marker {
+    flex-shrink: 0;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-top: 8px;
+  }
+
+  .finding-marker.critical { background: var(--accent-red); }
+  .finding-marker.product { background: var(--accent-blue); }
+  .finding-marker.insight { background: var(--accent-amber); }
+
+  .finding-text {
+    font-size: 15px;
+    line-height: 1.65;
+    color: var(--ink-light);
+  }
+
+  .finding-text strong {
+    color: var(--ink);
+    font-weight: 600;
+  }
+
+  /* ---- REPORT CARDS ---- */
+  .cards-label {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin-bottom: 16px;
+  }
+
+  .cards {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 32px 36px;
+    text-decoration: none;
+    color: inherit;
+    transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+    display: block;
+    position: relative;
+  }
+
+  .card:hover {
+    border-color: #ccc;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+    transform: translateY(-2px);
+  }
+
+  .card .card-type {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .card .card-type .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  .card-friction .card-type { color: var(--accent-blue); }
+  .card-friction .card-type .dot { background: var(--accent-blue); }
+
+  .card-bug .card-type { color: var(--accent-red); }
+  .card-bug .card-type .dot { background: var(--accent-red); }
+
+  .card h2 {
+    font-family: var(--serif);
+    font-size: 28px;
+    font-weight: 400;
+    line-height: 1.3;
+    color: var(--ink);
+    margin-bottom: 12px;
+    border: none;
+    padding: 0;
+  }
+
+  .card p {
+    font-size: 15px;
+    line-height: 1.65;
+    color: var(--ink-muted);
+    margin-bottom: 16px;
+  }
+
+  .card .card-meta {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+
+  .card .card-meta .tag {
+    font-size: 12px;
+    font-weight: 500;
+    padding: 4px 12px;
+    border-radius: 100px;
+    background: var(--bg-warm);
+    color: var(--ink-light);
+  }
+
+  .card .arrow {
+    position: absolute;
+    right: 32px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--bg-warm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s, opacity 0.2s, transform 0.2s;
+    opacity: 0;
+  }
+
+  .card:hover .arrow {
+    opacity: 1;
+    transform: translateY(-50%) translateX(2px);
+  }
+
+  .arrow svg {
+    width: 16px;
+    height: 16px;
+    stroke: var(--ink-muted);
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* ---- ABOUT ---- */
+  .about {
+    margin-top: 48px;
+    padding: 32px 36px;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+
+  .about-title {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin-bottom: 16px;
+  }
+
+  .about-text {
+    font-size: 15px;
+    line-height: 1.7;
+    color: var(--ink-light);
+    margin-bottom: 12px;
+  }
+
+  .about-text:last-child { margin-bottom: 0; }
+
+  .about-text strong {
+    color: var(--ink);
+    font-weight: 600;
+  }
+
+  .about-closer {
+    padding-top: 12px;
+    border-top: 1px solid var(--border-light);
+    font-size: 14px;
+    color: var(--ink-muted);
+  }
+
+  .about-name {
+    color: var(--ink);
+    font-weight: 600;
+    text-decoration: none;
+    border-bottom: 1px solid var(--border);
+    transition: border-color 0.15s;
+  }
+
+  .about-name:hover {
+    border-color: var(--ink-light);
+  }
+
+  /* ---- FOOTER ---- */
+  .footer {
+    margin-top: 56px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border-light);
+    font-size: 13px;
+    color: var(--ink-muted);
+    line-height: 1.7;
+  }
+
+  .footer a {
+    color: var(--ink-light);
+    text-decoration: none;
+    border-bottom: 1px solid var(--border);
+    transition: border-color 0.15s;
+  }
+
+  .footer a:hover {
+    border-color: var(--ink-light);
+  }
+
+  /* ---- MOBILE ---- */
+  @media (max-width: 600px) {
+    .page { padding: 48px 24px; }
+    .header h1 { font-size: 36px; }
+    .findings { padding: 24px; }
+    .card { padding: 24px; }
+    .card h2 { font-size: 24px; }
+    .card .arrow { display: none; }
+    .header .meta { flex-direction: column; gap: 8px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <div class="header">
+    <div class="label">Product Audit</div>
+    <h1>Qoruz Signup Flow</h1>
+    <p class="subtitle">An independent, hands-on audit of the Qoruz signup experience. Every path tested, every failure reproduced and verified through browser DevTools.</p>
+    <div class="meta">
+      <span><strong><a href="https://www.linkedin.com/in/ankurkulkarni/" target="_blank" style="color:inherit;text-decoration:none;border-bottom:1px solid var(--border);transition:border-color 0.15s" onmouseover="this.style.borderColor='var(--ink-light)'" onmouseout="this.style.borderColor='var(--border)'">Ankur Kulkarni</a></strong></span>
+      <span>3 May 2026</span>
+      <span>app.qoruz.com/signup</span>
+    </div>
+  </div>
+
+  <!-- WHAT I FOUND -->
+  <div class="findings">
+    <div class="findings-title">What I Found</div>
+
+    <div class="finding-item">
+      <div class="finding-marker critical"></div>
+      <div class="finding-text"><strong>Google OAuth signup is completely broken.</strong> 100% of users who click "Sign up with Google" hit a silent dead end. The frontend never sends a reCAPTCHA token, the backend returns a 422, and no error is shown. Tested 4 times across 2 accounts and 2 browser modes. Identical failure every time.</div>
+    </div>
+
+    <div class="finding-item">
+      <div class="finding-marker product"></div>
+      <div class="finding-text"><strong>The manual form rejects users after they've invested effort.</strong> Users fill three fields before learning public email domains aren't accepted. Whether this is a UX gap or a deliberate lead capture strategy via the CSM modal depends on intent only the Qoruz team can clarify.</div>
+    </div>
+
+    <div class="finding-item">
+      <div class="finding-marker insight"></div>
+      <div class="finding-text"><strong>The OAuth path currently serves neither goal.</strong> It doesn't convert users (broken), doesn't capture leads (no modal shown), and doesn't provide feedback (silent failure). Fixing it is the highest-leverage improvement regardless of design philosophy.</div>
+    </div>
+  </div>
+
+  <!-- REPORT CARDS -->
+  <div class="cards-label">Detailed Reports</div>
+  <div class="cards">
+
+    <a href="qoruz-friction-analysis.html" class="card card-friction">
+      <div class="card-type"><span class="dot"></span> Friction Analysis</div>
+      <h2>Signup Funnel: End-to-End Review</h2>
+      <p>A complete walkthrough of every signup path: Google OAuth, manual form, and the work-email qualification gate. Maps friction points to drop-off risk and proposes two design approaches based on business intent.</p>
+      <div class="card-meta">
+        <span class="tag">UX analysis</span>
+        <span class="tag">2 design approaches</span>
+        <span class="tag">9 sections</span>
+      </div>
+      <div class="arrow">
+        <svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </div>
+    </a>
+
+    <a href="qoruz-bug-report.html" class="card card-bug">
+      <div class="card-type"><span class="dot"></span> Bug Report</div>
+      <h2>Google OAuth Signup: Silent Failure</h2>
+      <p>The Google OAuth signup path silently fails for all users. Root cause: the OAuth callback never generates a reCAPTCHA token, causing the registration API to return a 422. No error is shown to the user.</p>
+      <div class="card-meta">
+        <span class="tag">Critical severity</span>
+        <span class="tag">100% repro rate</span>
+        <span class="tag">10 sections</span>
+      </div>
+      <div class="arrow">
+        <svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </div>
+    </a>
+
+  </div>
+
+  <!-- ABOUT -->
+  <div class="about">
+    <div class="about-title">About Me</div>
+    <p class="about-text">Hi, I'm <a href="https://www.linkedin.com/in/ankurkulkarni/" target="_blank" class="about-name">Ankur Kulkarni</a>. I'm currently a solo founder building <a href="https://www.knewsiq.com/today/?utm_source=qoruz-audit&utm_medium=referral&utm_campaign=jobhunting" target="_blank" class="about-name">KnewsIQ</a>, an AI-powered geopolitical intelligence platform. Before this, I co-founded <strong>RoughSheet</strong>, an ed-tech platform that grew to 20,000+ organic users with zero paid marketing. In between, I spent seven years doing freelance product consulting for early-stage startups across ed-tech, wellness tech, and agri-tech.</p>
+    <p class="about-text about-closer">I conducted this audit independently after trying to sign up for Qoruz. I've applied for the <strong>Senior Product Manager</strong> role.</p>
+  </div>
+
+  <div class="footer">
+    Prepared as an independent product audit. All issues documented through direct testing and browser DevTools inspection.<br>
+    Questions? Reach out at <a href="mailto:ankurkulkarni90@gmail.com" target="_blank">ankurkulkarni90@gmail.com</a>
+  </div>
+</div>
+
+</body>
+</html>
