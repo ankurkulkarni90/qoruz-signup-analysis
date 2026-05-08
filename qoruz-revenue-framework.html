@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Qoruz Revenue Impact Framework</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #faf9f7; }
+  #root { min-height: 100vh; }
+</style>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState } = React;
+
+// ── Reusable Components ──
+const P = ({ children, style = {} }) => (
+  <p style={{ fontSize: 16, lineHeight: 1.75, color: "#3d3d5c", margin: "0 0 14px", ...style }}>{children}</p>
+);
+
+const Section = ({ number, title, children }) => (
+  <div style={{ marginBottom: 52, paddingBottom: 44, borderBottom: "1px solid #e8e5df" }}>
+    <div style={{ display: "flex", alignItems: "baseline", gap: 14, marginBottom: 22 }}>
+      <span style={{ fontFamily: "'Georgia', serif", fontSize: 44, fontWeight: 400, color: "#1a1a2e", lineHeight: 1, opacity: 0.15 }}>{String(number).padStart(2, "0")}</span>
+      <h2 style={{ fontFamily: "'Georgia', serif", fontSize: 28, fontWeight: 400, color: "#1a1a2e", lineHeight: 1.3, margin: 0 }}>{title}</h2>
+    </div>
+    {children}
+  </div>
+);
+
+const Callout = ({ type = "insight", children }) => {
+  const c = { insight: { bg: "#fef9ee", border: "#d97706" }, critical: { bg: "#fef2f0", border: "#c23b22" }, data: { bg: "#eff6ff", border: "#2563eb" }, caveat: { bg: "#f5f3ef", border: "#9b9baa" } }[type];
+  return (
+    <div style={{ background: c.bg, borderLeft: `3px solid ${c.border}`, padding: "18px 22px", borderRadius: "0 8px 8px 0", margin: "18px 0" }}>
+      <div style={{ fontSize: 15, lineHeight: 1.75, color: "#3d3d5c" }}>{children}</div>
+    </div>
+  );
+};
+
+const Tab = ({ active, onClick, children }) => (
+  <button onClick={onClick} style={{
+    padding: "10px 22px", fontSize: 14, fontWeight: active ? 600 : 400,
+    color: active ? "#1a1a2e" : "#6b6b8a", background: active ? "#fff" : "transparent",
+    border: active ? "1px solid #e8e5df" : "1px solid transparent",
+    borderBottom: active ? "1px solid #fff" : "1px solid #e8e5df",
+    borderRadius: "6px 6px 0 0", cursor: "pointer", marginBottom: -1,
+  }}>{children}</button>
+);
+
+const CompactTab = ({ active, onClick, children }) => (
+  <button onClick={onClick} style={{
+    padding: "5px 14px", fontSize: 12, fontWeight: active ? 700 : 400,
+    color: active ? "#c23b22" : "#6b6b8a",
+    background: active ? "#fef2f0" : "transparent",
+    border: active ? "1px solid #e8c5bf" : "1px solid #e8e5df",
+    borderRadius: 5, cursor: "pointer", letterSpacing: 0.3,
+    transition: "all 0.15s ease",
+  }}>{children}</button>
+);
+
+const TableRow = ({ cells, isHeader = false, expandable = null }) => {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <>
+      <div
+        onClick={expandable ? () => setExpanded(!expanded) : undefined}
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1.4fr 0.8fr 90px 1.5fr",
+          gap: 10,
+          padding: isHeader ? "10px 0 8px" : "12px 0",
+          borderBottom: expanded ? "none" : "1px solid #f0ede8",
+          alignItems: "center",
+          cursor: expandable ? "pointer" : "default",
+          minWidth: 620,
+        }}
+      >
+        {cells.map((cell, i) => (
+          <span key={i} style={{
+            fontSize: isHeader ? 11 : 15,
+            fontWeight: isHeader ? 700 : (i === 1 ? 700 : 400),
+            fontFamily: (!isHeader && i === 1) ? "'Courier New', monospace" : "inherit",
+            letterSpacing: isHeader ? 1.2 : 0,
+            textTransform: isHeader ? "uppercase" : "none",
+            color: isHeader ? "#9b9baa" : (i === 0 ? "#3d3d5c" : i === 3 ? "#9b9baa" : "#1a1a2e"),
+            ...(i === 3 ? { fontSize: 13 } : {}),
+          }}>
+            {!isHeader && i === 2 ? (
+              <span style={{
+                fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 100, display: "inline-block",
+                background: cell === "Verified" ? "#dcfce7" : cell === "High" ? "#eff6ff" : cell === "Medium" ? "#fef9ee" : "#fef2f0",
+                color: cell === "Verified" ? "#166534" : cell === "High" ? "#1e40af" : cell === "Medium" ? "#92400e" : "#991b1b",
+              }}>{cell}</span>
+            ) : (
+              <>
+                {cell}
+                {!isHeader && i === 0 && expandable && (
+                  <span style={{ fontSize: 11, color: "#b0afc0", marginLeft: 6 }}>{expanded ? "\u25BE" : "\u25B8"}</span>
+                )}
+              </>
+            )}
+          </span>
+        ))}
+      </div>
+      {expanded && expandable && (
+        <div style={{ padding: "4px 0 14px 0", borderBottom: "1px solid #f0ede8", fontSize: 13, color: "#7c7c99", lineHeight: 1.7 }}>
+          {expandable}
+        </div>
+      )}
+    </>
+  );
+};
+
+// ── Top-of-Funnel Bar Chart ──
+const TopFunnelBars = ({ visitors, visitorsFormatted, signupAttempts, signupFormatted, pct, source }) => {
+  const attemptPct = (signupAttempts / visitors) * 100;
+  return (
+    <div style={{ margin: "16px 0 8px" }}>
+      {[
+        { label: "Total Monthly Visitors", value: visitorsFormatted, width: 100, color: "#6b6b8a", note: source },
+        { label: `Signup Attempts (${pct}% of visitors)`, value: signupFormatted, width: attemptPct, color: "#2563eb", note: "Source: OpenView/WordStream. B2B SaaS benchmark: 2-5%." },
+      ].map(({ label, value, width, color, note }, i) => (
+        <div key={i} style={{ marginBottom: 6 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+            <span style={{ fontSize: 14, color: "#3d3d5c" }}>{label}</span>
+            <span style={{ fontSize: 15, fontFamily: "'Courier New', monospace", fontWeight: 700, color }}>{value}</span>
+          </div>
+          <div style={{ height: 20, borderRadius: 4, background: "#f0ede8", overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${width}%`, background: color, borderRadius: 4, opacity: 0.85, transition: "width 0.4s ease" }} />
+          </div>
+          <div style={{ fontSize: 12, color: "#9b9baa", marginTop: 3, marginBottom: 10, lineHeight: 1.4 }}>{note}</div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// ── Signup Path Flowchart ──
+const SignupFlowchart = ({ signupAttempts, signupFormatted, oauthAttempts, oauthFormatted, oauthPct, manualAttempts, manualFormatted, manualPct, manualLost, manualLostFormatted, manualSuccess, manualSuccessFormatted, formDropPct }) => {
+  const w = 680, h = 420;
+  const cx = w / 2;
+  const Box = ({ x, y, bw, bh, fill, stroke, label, value, sublabel, textColor = "#fff" }) => (
+    <g>
+      <rect x={x - bw/2} y={y} width={bw} height={bh} rx={8} fill={fill} stroke={stroke} strokeWidth={1.5} />
+      <text x={x} y={y + bh/2 - (sublabel ? 8 : 2)} textAnchor="middle" dominantBaseline="middle" fill={textColor} fontSize="14" fontWeight="700" fontFamily="'Courier New', monospace">{value}</text>
+      <text x={x} y={y + bh/2 + (sublabel ? 8 : 14)} textAnchor="middle" dominantBaseline="middle" fill={textColor} fontSize="10.5" fontFamily="-apple-system, sans-serif" opacity="0.85">{label}</text>
+      {sublabel && <text x={x} y={y + bh/2 + 22} textAnchor="middle" dominantBaseline="middle" fill={textColor} fontSize="9.5" fontFamily="-apple-system, sans-serif" opacity="0.7">{sublabel}</text>}
+    </g>
+  );
+  const Ln = ({ x1, y1, x2, y2, color = "#c0bdb6" }) => (
+    <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={color} strokeWidth={1.5} />
+  );
+  const Tri = ({ x, y, color = "#c0bdb6" }) => (
+    <polygon points={`${x-4},${y-4} ${x+4},${y-4} ${x},${y+2}`} fill={color} />
+  );
+  const topY = 10, splitY = 80, pathBoxY = 150, outcomeY = 280;
+  const leftX = cx - 140, rightX = cx + 140;
+  return (
+    <div style={{ margin: "20px 0", background: "#fff", border: "1px solid #e8e5df", borderRadius: 10, padding: "16px 12px 12px" }}>
+      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", color: "#9b9baa", marginBottom: 8, paddingLeft: 8 }}>
+        Signup Path Flowchart
+      </div>
+      <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", height: "auto", display: "block" }}>
+        <Box x={cx} y={topY} bw={220} bh={50} fill="#2563eb" stroke="#1d4ed8" label="Signup Attempts" value={signupFormatted} textColor="#fff" />
+        <Ln x1={cx} y1={topY + 50} x2={cx} y2={splitY} />
+        <circle cx={cx} cy={splitY + 10} r={14} fill="#f5f3ef" stroke="#e8e5df" strokeWidth={1} />
+        <text x={cx} y={splitY + 11} textAnchor="middle" dominantBaseline="middle" fill="#6b6b8a" fontSize="10" fontWeight="600" fontFamily="-apple-system, sans-serif">Split</text>
+        <Ln x1={cx - 14} y1={splitY + 10} x2={leftX} y2={splitY + 10} />
+        <Ln x1={cx + 14} y1={splitY + 10} x2={rightX} y2={splitY + 10} />
+        <Ln x1={leftX} y1={splitY + 10} x2={leftX} y2={pathBoxY - 6} color="#c23b22" />
+        <Tri x={leftX} y={pathBoxY - 4} color="#c23b22" />
+        <Ln x1={rightX} y1={splitY + 10} x2={rightX} y2={pathBoxY - 6} color="#d97706" />
+        <Tri x={rightX} y={pathBoxY - 4} color="#d97706" />
+        <text x={leftX + 50} y={splitY} textAnchor="middle" fill="#c23b22" fontSize="11" fontWeight="600" fontFamily="-apple-system, sans-serif">{oauthPct}%</text>
+        <text x={rightX - 50} y={splitY} textAnchor="middle" fill="#d97706" fontSize="11" fontWeight="600" fontFamily="-apple-system, sans-serif">{manualPct}%</text>
+        <Box x={leftX} y={pathBoxY} bw={200} bh={60} fill="#c23b22" stroke="#a3301b" label="Google OAuth" value={oauthFormatted} sublabel="Sign up with Google" textColor="#fff" />
+        <Box x={rightX} y={pathBoxY} bw={200} bh={60} fill="#d97706" stroke="#b86205" label="Manual Email Form" value={manualFormatted} sublabel="Work email + password" textColor="#fff" />
+        <Ln x1={leftX} y1={pathBoxY + 60} x2={leftX} y2={outcomeY - 6} color="#c23b22" />
+        <Tri x={leftX} y={outcomeY - 4} color="#c23b22" />
+        <Ln x1={rightX} y1={pathBoxY + 60} x2={rightX} y2={outcomeY - 36} color="#d97706" />
+        <circle cx={rightX} cy={outcomeY - 26} r={10} fill="#f5f3ef" stroke="#e8e5df" strokeWidth={1} />
+        <text x={rightX} y={outcomeY - 25} textAnchor="middle" dominantBaseline="middle" fill="#6b6b8a" fontSize="8" fontWeight="600" fontFamily="-apple-system, sans-serif">Split</text>
+        <Ln x1={rightX - 10} y1={outcomeY - 26} x2={rightX - 95} y2={outcomeY - 26} />
+        <Ln x1={rightX + 10} y1={outcomeY - 26} x2={rightX + 95} y2={outcomeY - 26} />
+        <Ln x1={rightX - 95} y1={outcomeY - 26} x2={rightX - 95} y2={outcomeY - 6} color="#c23b22" />
+        <Tri x={rightX - 95} y={outcomeY - 4} color="#c23b22" />
+        <Ln x1={rightX + 95} y1={outcomeY - 26} x2={rightX + 95} y2={outcomeY - 6} color="#0d9488" />
+        <Tri x={rightX + 95} y={outcomeY - 4} color="#0d9488" />
+        <text x={rightX - 55} y={outcomeY - 36} textAnchor="middle" fill="#c23b22" fontSize="10" fontWeight="600" fontFamily="-apple-system, sans-serif">{formDropPct}%</text>
+        <text x={rightX + 55} y={outcomeY - 36} textAnchor="middle" fill="#0d9488" fontSize="10" fontWeight="600" fontFamily="-apple-system, sans-serif">{100 - formDropPct}%</text>
+        <rect x={leftX - 100} y={outcomeY} width={200} height={55} rx={8} fill="#fef2f0" stroke="#c23b22" strokeWidth={1.5} strokeDasharray="4,3" />
+        <text x={leftX} y={outcomeY + 18} textAnchor="middle" dominantBaseline="middle" fill="#c23b22" fontSize="13" fontWeight="700" fontFamily="'Courier New', monospace">0 signups</text>
+        <text x={leftX} y={outcomeY + 34} textAnchor="middle" dominantBaseline="middle" fill="#c23b22" fontSize="10.5" fontFamily="-apple-system, sans-serif" fontWeight="600">100% SILENT FAILURE</text>
+        <text x={leftX} y={outcomeY + 48} textAnchor="middle" dominantBaseline="middle" fill="#9b9baa" fontSize="9.5" fontFamily="-apple-system, sans-serif">{oauthFormatted} users lost, no error shown</text>
+        <rect x={rightX - 95 - 68} y={outcomeY} width={136} height={50} rx={8} fill="#fef2f0" stroke="#c23b22" strokeWidth={1} />
+        <text x={rightX - 95} y={outcomeY + 17} textAnchor="middle" dominantBaseline="middle" fill="#c23b22" fontSize="13" fontWeight="700" fontFamily="'Courier New', monospace">{manualLostFormatted}</text>
+        <text x={rightX - 95} y={outcomeY + 33} textAnchor="middle" dominantBaseline="middle" fill="#c23b22" fontSize="10" fontFamily="-apple-system, sans-serif" fontWeight="600">Dropped off</text>
+        <text x={rightX - 95} y={outcomeY + 45} textAnchor="middle" dominantBaseline="middle" fill="#9b9baa" fontSize="9" fontFamily="-apple-system, sans-serif">Email rejected / friction</text>
+        <rect x={rightX + 95 - 68} y={outcomeY} width={136} height={50} rx={8} fill="#ecfdf5" stroke="#0d9488" strokeWidth={1.5} />
+        <text x={rightX + 95} y={outcomeY + 17} textAnchor="middle" dominantBaseline="middle" fill="#0d9488" fontSize="13" fontWeight="700" fontFamily="'Courier New', monospace">{manualSuccessFormatted}</text>
+        <text x={rightX + 95} y={outcomeY + 33} textAnchor="middle" dominantBaseline="middle" fill="#0d9488" fontSize="10" fontFamily="-apple-system, sans-serif" fontWeight="600">Successful</text>
+        <text x={rightX + 95} y={outcomeY + 45} textAnchor="middle" dominantBaseline="middle" fill="#9b9baa" fontSize="9" fontFamily="-apple-system, sans-serif">Only working path</text>
+        <rect x={20} y={h - 50} width={w - 40} height={38} rx={6} fill="#f5f3ef" stroke="#e8e5df" strokeWidth={1} />
+        <text x={cx} y={h - 31} textAnchor="middle" dominantBaseline="middle" fill="#3d3d5c" fontSize="11.5" fontFamily="-apple-system, sans-serif" fontWeight="600">
+          Of {signupFormatted} signup attempts: {oauthFormatted} lost to OAuth bug + {manualLostFormatted} lost to form friction = {manualSuccessFormatted} successful ({((manualSuccess / (oauthAttempts + manualAttempts)) * 100).toFixed(0)}% survival)
+        </text>
+      </svg>
+    </div>
+  );
+};
+
+// ── Main Component ──
+function QoruzFramework() {
+  const [activeScenario, setActiveScenario] = useState("moderate");
+  const [bugDuration, setBugDuration] = useState(3);
+  const [showParamReasoning, setShowParamReasoning] = useState(false);
+
+  const scenarios = {
+    conservative: {
+      label: "Conservative",
+      monthlyVisitors: 100000, visitorToSignupAttempt: 0.03, oauthShare: 0.35,
+      formRejectionRate: 0.50, freemiumToPaid: 0.026, avgPaidARPU_monthly: 360,
+    },
+    moderate: {
+      label: "Moderate",
+      monthlyVisitors: 130000, visitorToSignupAttempt: 0.04, oauthShare: 0.45,
+      formRejectionRate: 0.45, freemiumToPaid: 0.035, avgPaidARPU_monthly: 420,
+    },
+    aggressive: {
+      label: "Aggressive",
+      monthlyVisitors: 170000, visitorToSignupAttempt: 0.05, oauthShare: 0.53,
+      formRejectionRate: 0.40, freemiumToPaid: 0.05, avgPaidARPU_monthly: 480,
+    },
+  };
+
+  const s = scenarios[activeScenario];
+
+  const signupAttempts = Math.round(s.monthlyVisitors * s.visitorToSignupAttempt);
+  const oauthAttempts = Math.round(signupAttempts * s.oauthShare);
+  const manualAttempts = signupAttempts - oauthAttempts;
+  const oauthLost = oauthAttempts;
+  const manualLostToRejection = Math.round(manualAttempts * s.formRejectionRate);
+  const manualSuccess = manualAttempts - manualLostToRejection;
+
+  const potentialPaidFromOAuth = Math.round(oauthLost * s.freemiumToPaid);
+  const monthlyPotentialRevLoss = potentialPaidFromOAuth * s.avgPaidARPU_monthly;
+  const cumulativeLoss = monthlyPotentialRevLoss * bugDuration;
+
+  const formatUSD = (val) => {
+    if (val >= 1000000) return `$${(val / 1000000).toFixed(2)}M`;
+    if (val >= 1000) return `$${(val / 1000).toFixed(1)}K`;
+    return `$${val.toLocaleString("en-US")}`;
+  };
+  const formatNum = (val) => val >= 1000 ? `${(val / 1000).toFixed(1)}K` : val.toLocaleString();
+
+  const annualRevenueUSD = 6710000;
+
+  const paramReasons = [
+    {
+      param: "Monthly Visitors",
+      values: ["100K", "130K", "170K"],
+      reasoning: "StatShow estimates ~130K. ipaddress.com estimates ~270K (likely inflated). Conservative uses 100K as a floor for a B2B SaaS with limited consumer awareness. Moderate uses the StatShow midpoint. Aggressive uses 170K accounting for indirect/referral traffic that StatShow may miss.",
+      source: "StatShow, ipaddress.com",
+    },
+    {
+      param: "Visitor-to-Signup Attempt Rate",
+      values: ["3%", "4%", "5%"],
+      reasoning: "This is the percentage of total monthly visitors who click 'Sign up.' OpenView Partners 2023 SaaS Metrics Report benchmarks B2B SaaS trial signup at 3-5%. WordStream reports 2-5% average. Conservative uses the floor. Moderate uses the midpoint. Aggressive uses the ceiling. These rates are for signup attempts, not completions.",
+      source: "OpenView Partners, WordStream, CXL Institute",
+    },
+    {
+      param: "Google OAuth Share",
+      values: ["35%", "45%", "53%"],
+      reasoning: "Of users who attempt signup, what fraction clicks 'Sign up with Google'? Auth0 reports Google is 75% of all social logins (but social login is not the only option). Scalekit reports 53% overall preference for Google SSO. Conservative (35%) assumes agency professionals prefer email. Moderate (45%) is a weighted blend. Aggressive (53%) uses Scalekit's figure directly, supported by Google Workspace dominance among Indian agencies.",
+      source: "Auth0, Scalekit, InfluenceFlow",
+    },
+    {
+      param: "Manual Form Drop-off Rate",
+      values: ["50%", "45%", "40%"],
+      reasoning: "Heap.io (79 SaaS companies): average signup completion is 36.2%, implying ~64% drop-off. However, Qoruz's target users (agencies, brands) are more likely to have work emails passing the public-email filter. Conservative (50%) assumes many Indian marketers use Gmail for work. Aggressive (40%) assumes corporate-skewed audience. All three are below the Heap average because Qoruz visitors with signup intent are higher-intent than the average SaaS visitor.",
+      source: "Heap.io (79 SaaS companies)",
+    },
+    {
+      param: "Freemium-to-Paid Conversion",
+      values: ["2.6%", "3.5%", "5%"],
+      reasoning: "First Page Sage (86 companies): organic freemium-to-paid is 2.6%. Guru Startups: 2-5% base case. Databox SMB survey: 3-10%. ChartMogul (200 products): 8% median but includes trial models. Conservative uses First Page Sage floor. Aggressive uses Guru Startups ceiling. Qoruz's free plan is 'extremely limiting' (Ainfluencer), which could push upgrades faster or cause early churn. Critical assumption: small changes significantly move the revenue estimate.",
+      source: "First Page Sage, ChartMogul, Guru Startups, Databox",
+    },
+    {
+      param: "Blended Monthly ARPU",
+      values: ["$360", "$420", "$480"],
+      reasoning: "Ainfluencer review: Growth plan ~$360/month. Enterprise is custom, likely $1,000-2,500+. Conservative ($360) assumes most lost signups land on Growth. Aggressive ($480) assumes higher Enterprise mix. Cross-check: $6.7M annual / 1,000+ customers (press release) \u2248 $558/month average, which sits above this range, confirming these estimates are conservative.",
+      source: "Ainfluencer, Tracxn, Qoruz press release",
+    },
+  ];
+
+  return (
+    <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", maxWidth: 820, margin: "0 auto", padding: "48px 32px", background: "#faf9f7", minHeight: "100vh", color: "#1a1a2e" }}>
+
+      {/* ── HEADER ── */}
+      <div style={{ marginBottom: 56 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 2.5, textTransform: "uppercase", color: "#9b9baa", marginBottom: 14 }}>Revenue Impact Framework</div>
+        <h1 style={{ fontFamily: "'Georgia', serif", fontSize: 38, fontWeight: 400, lineHeight: 1.2, color: "#1a1a2e", margin: "0 0 16px" }}>
+          Qoruz Signup Funnel: Estimating the Potential Revenue Cost of Broken Flows
+        </h1>
+        <p style={{ fontSize: 17, color: "#6b6b8a", lineHeight: 1.7, maxWidth: 660 }}>
+          A structured estimation model mapping two independently documented and reproduced bugs in the Qoruz signup flow to their potential revenue impact. Every number is sourced, every assumption is documented with reasoning, and every estimate is labelled by confidence level.
+        </p>
+        <div style={{ display: "flex", gap: 20, marginTop: 20, paddingTop: 16, borderTop: "1px solid #e8e5df", flexWrap: "wrap" }}>
+          <span style={{ fontSize: 14, color: "#9b9baa" }}><strong style={{ color: "#6b6b8a", fontWeight: 500 }}>Ankur Kulkarni</strong></span>
+          <span style={{ fontSize: 14, color: "#9b9baa" }}>May 2026</span>
+          <span style={{ fontSize: 14, color: "#9b9baa" }}>Companion to the <a href="https://ankurkulkarni90.github.io/qoruz-signup-analysis/" target="_blank" rel="noopener" style={{ color: "#6b6b8a", textDecoration: "none", borderBottom: "1px solid #d0cec8" }}>Qoruz Signup Audit</a></span>
+        </div>
+      </div>
+
+      {/* ── IMPORTANT CAVEAT ── */}
+      <Callout type="caveat">
+        <strong>A note on what this document claims and does not claim.</strong> The figures below represent <em>potential</em> revenue loss: the upper bound of revenue that could have been captured if the signup flow were functioning correctly and downstream conversion, product experience, and value delivery all performed at industry-average levels. This is not a guarantee that fixing the bugs produces this exact revenue gain. The purpose of this model is to quantify the size of the opportunity being lost at the top of the funnel.
+      </Callout>
+
+      {/* ── SECTION 1 ── */}
+      <Section number={1} title="Verified Qoruz-Specific Data">
+        <P>Publicly available, cross-referenced data points specific to Qoruz. These anchor the estimation model. Click any row with a \u25B8 to expand the full source detail.</P>
+        <div style={{ background: "#fff", border: "1px solid #e8e5df", borderRadius: 10, padding: "20px 24px", marginTop: 12, overflowX: "auto" }}>
+          <TableRow isHeader cells={["Metric", "Value", "Confidence", "Source"]} />
+          <TableRow
+            cells={["Annual Revenue (FY25)", "~$6.7M", "High", "Tracxn (\u20B956.4 Cr at \u20B984/USD)"]}
+            expandable={<>
+              Cross-referenced across 5 sources: (1) Tracxn: \u20B956.4 Cr as of Mar 31, 2025, backed by MCA filings. (2) CBInsights: $4.09M for FY23. (3) Business Standard (Aug 2023): \u20B934 Cr. (4) Parent entity Datrux Systems: \u20B947.7 Cr in FY24 with 37% CAGR (Tracxn). At 37% growth, Datrux FY25 \u2248 \u20B965 Cr; Qoruz's \u20B956.4 Cr share is consistent, with remainder attributable to Hashfame. (5) GetLatka claims $12.9M but is unreliable for Indian SaaS (frequently diverges from MCA filings).<br/><br/>
+              <strong>Entity note:</strong> Datrux Systems Pvt. Ltd. (CIN: U74140HR2015PTC054664, incorporated Feb 2015, Gurugram) is the legal parent of two brands: Qoruz and Hashfame. Hashfame is a creator-brand networking marketplace founded in 2024 with 28 employees (down 71% YoY per Tracxn). Qoruz is the dominant revenue contributor.
+            </>}
+          />
+          <TableRow
+            cells={["Implied Monthly Revenue", "~$559K", "Medium", "$6.71M / 12"]}
+            expandable="SaaS revenue is not perfectly even across months (seasonal campaigns, annual renewals), but monthly averaging is standard practice for estimation."
+          />
+          <TableRow cells={["Employee Count", "115-119", "High", "Tracxn (115, Jun 2025), PitchBook (119), GetLatka (117)"]} />
+          <TableRow
+            cells={["Total Funding Raised", "$1.03M (5 rounds)", "High", "Tracxn. Latest: $500K Pre-Series A, Jul 2025"]}
+            expandable="Latest round from The Chennai Angels (Business Standard, Jul 8, 2025). Notably bootstrapped relative to revenue. Press release: targeting '$30M ARR by 2026, growing 3x YoY in enterprise client adoption.'"
+          />
+          <TableRow cells={["Active Brands and Agencies", "1,000+", "High", "Qoruz press release (Business Standard, Jul 2025)"]} />
+          <TableRow cells={["Agency Penetration", "6 of top 10 Indian agencies", "High", "BW Marketing World, Apr 28, 2025"]} />
+          <TableRow
+            cells={["Creator Database Size", "20M+ global", "High", "Qoruz press release, Jul 2025"]}
+            expandable="Press release (Jul 2025): '20 million creators across platforms.' G2 listing: 7.5M. LitCommerce (Dec 2025): '500K+ in India.' The 20M figure is most recent and from Qoruz directly. Discrepancy likely reflects database growth."
+          />
+          <TableRow cells={["Active Competitors", "391 (71 funded)", "High", "Tracxn. PitchBook lists 49."]} />
+          <TableRow
+            cells={["Google OAuth Bug", "100% failure rate", "Verified", "Independent testing, 4 attempts, 2 accounts, 2 modes"]}
+            expandable="Root cause: OAuth callback never generates a reCAPTCHA token; backend returns HTTP 422; no error shown to user. Documented in the companion bug report with full DevTools trace."
+          />
+        </div>
+      </Section>
+
+      {/* ── SECTION 2 ── */}
+      <Section number={2} title="Estimated Data with Sources and Reasoning">
+        <P>For every metric Qoruz does not publicly disclose, this section documents the estimate, source, and reasoning. Click any row with a \u25B8 to expand the full rationale.</P>
+        <div style={{ background: "#fff", border: "1px solid #e8e5df", borderRadius: 10, padding: "20px 24px", marginTop: 12, overflowX: "auto" }}>
+          <TableRow isHeader cells={["Metric", "Estimate", "Confidence", "Source Summary"]} />
+          <TableRow
+            cells={["Monthly Website Visitors", "100K-170K", "Low", "StatShow (~130K), ipaddress.com (~270K)"]}
+            expandable="Third-party traffic estimators diverge by 30-50% for sites under 500K monthly visits. StatShow estimates ~130K visitors and ~286K pageviews. ipaddress.com estimates ~9K daily (~270K monthly). Range: 100K (conservative floor) to 170K (aggressive ceiling). This is the lowest-confidence input in the model."
+          />
+          <TableRow
+            cells={["Non-Engaged Session Rate (Bounce)", "45-55%", "Low-Medium", "Daydream 2026, CXL research"]}
+            expandable={<>B2B SaaS average: 40-60% (Daydream 2026). CXL: sub-55% is healthy for B2B SaaS. High-intent pages (pricing, signup): 35-55% (Daydream). Qoruz's mix of content pages (higher bounce) and product pages (lower bounce) supports a 45-55% blended estimate. Uses GA4 definition: non-engaged sessions last under 10 seconds, have no conversion, and fewer than 2 page views.</>}
+          />
+          <TableRow
+            cells={["Visitor-to-Signup Attempt Rate", "3-5%", "Medium", "OpenView Partners, WordStream, CXL"]}
+            expandable="OpenView 2023 SaaS Metrics: trial signup 3-5% for B2B SaaS. WordStream/Klipfolio: 2-5% average, top performers exceed 11%. CXL (2,900 SaaS sites): 2-5%, top 10% average 11.3%. First Page Sage (86 companies): freemium sees 13.3% but includes consumer products. 3-5% is the B2B SaaS-specific range. These represent users who click 'Sign up,' not those who complete it."
+          />
+          <TableRow
+            cells={["Google OAuth Share of Attempts", "35-53%", "Medium", "Auth0 (75% of social logins), Scalekit (53%)"]}
+            expandable="Auth0: Google is 75% of social logins; 25% of MAUs use social login. The 75% figure is Google's share within social logins only, not its share of all signup attempts. Scalekit: 53% preference for Google SSO. On Qoruz, 'Sign up with Google' is the first and most prominent option. For B2B SaaS with Google Workspace-heavy users, OAuth adoption tends higher. 35% floor assumes agency professionals prefer email signup with work domain."
+          />
+          <TableRow
+            cells={["Manual Form Drop-off Rate", "40-50%", "Low-Medium", "Heap.io (79 SaaS companies)"]}
+            expandable="Heap: average signup completion is 36.2% (implying ~64% drop-off). Qoruz adds an additional filter: public email domains (Gmail, Yahoo, Outlook) are rejected after submission, forcing a CSM contact modal. 40-50% is used instead of 64% because Qoruz's target users (agencies, brands) are more likely to have work emails. However, many Indian marketing professionals use Gmail for work, so the true drop-off could be higher."
+          />
+          <TableRow
+            cells={["Freemium-to-Paid Conversion", "2.6-5%", "Low-Medium", "First Page Sage, Guru Startups, Databox"]}
+            expandable="First Page Sage (86 companies, Q1 2022 to Q3 2025): organic freemium-to-paid is 2.6%. ChartMogul (200 products, Jan 2026): median 8%, but includes trial models. Guru Startups (2025): 2-5% base case, 8-15% top quartile. Databox SMB survey: 3-10%. Qoruz runs freemium, and its free plan is 'extremely limiting, about 10% of capabilities' (Ainfluencer). Critical assumption: small changes here significantly move the revenue estimate."
+          />
+          <TableRow
+            cells={["Average Paid ARPU (Monthly)", "$360-$480", "Low-Medium", "Ainfluencer: Growth ~$360/month"]}
+            expandable={<>Ainfluencer (Oct 2025): Growth plan ~$360/month. Enterprise is custom-priced. Competitive context: Influencer Hero starts at $649/month; CreatorIQ at ~$2,917/month. Blended $360-$480 weighted toward Growth. <strong>Cross-check:</strong> $6.7M annual / 1,000+ customers (press release) \u2248 $558/month average, confirming these ARPU estimates are conservative.</>}
+          />
+        </div>
+      </Section>
+
+      {/* ── SECTION 3 ── */}
+      <Section number={3} title="Visitor Taxonomy">
+        <P>In Google Analytics 4, sessions are classified as <strong>engaged</strong> (10+ seconds, a conversion, or 2+ page views) or <strong>non-engaged</strong> (bounces). Among engaged sessions on the auth page, visitors are one of these types:</P>
+
+        <div style={{ background: "#fff", border: "1px solid #e8e5df", borderRadius: 10, padding: "24px 28px", marginTop: 12 }}>
+          {[
+            { type: "A", label: "Returning Registered Users", desc: "Already have an account (free or paid). Follow the login path.", color: "#6b6b8a", relevance: "Excluded from this analysis." },
+            { type: "B", label: "First-Time Visitors with Signup Intent", desc: "Arrived from organic search, ads, content, or direct URL. Evaluating Qoruz for the first time.", color: "#2563eb", relevance: "Primary population affected by both bugs." },
+            { type: "C", label: "Returning Unregistered Visitors", desc: "Visited before, did not sign up, returned. Consideration-stage behaviour, higher intent.", color: "#0d9488", relevance: "Affected by both bugs. Higher intent than Type B." },
+            { type: "D", label: "Agency-Referred or Sales-Referred Visitors", desc: "Directed by one of the 6 top-10 agencies or by a Qoruz sales contact. Near-certain signup intent.", color: "#d97706", relevance: "Broken flow damages not just the conversion but the referring relationship." },
+          ].map(({ type, label, desc, color, relevance }) => (
+            <div key={type} style={{ display: "flex", gap: 14, padding: "14px 0", borderBottom: "1px solid #f0ede8" }}>
+              <div style={{ width: 28, height: 28, borderRadius: 6, background: color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, flexShrink: 0, marginTop: 2 }}>{type}</div>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: "#1a1a2e", marginBottom: 4 }}>{label}</div>
+                <div style={{ fontSize: 14, color: "#6b6b8a", lineHeight: 1.65, marginBottom: 4 }}>{desc}</div>
+                <div style={{ fontSize: 13, color: "#9b9baa" }}>{relevance}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <P style={{ marginTop: 16, fontSize: 14, color: "#7c7c99" }}>
+          <strong style={{ color: "#6b6b8a" }}>Why exhaustive:</strong> Any non-bounced visitor to the auth page is either registered (A) or not (B/C/D). Among unregistered visitors, the distinction is visit frequency and referral source.
+        </P>
+      </Section>
+
+      {/* ── SECTION 4 ── */}
+      <Section number={4} title="Potential Revenue Impact Model">
+        <P>This model estimates potential monthly and cumulative revenue loss from the Google OAuth bug. "Potential" means the revenue ceiling structurally inaccessible while the bug persists.</P>
+
+        <Callout type="caveat">
+          <strong>Model structure:</strong> Total monthly visitors \u2192 signup attempt rate \u2192 split between OAuth and manual paths \u2192 apply 100% OAuth failure + manual form drop-off \u2192 lost signups \u2192 apply freemium-to-paid conversion rate \u2192 multiply by average monthly ARPU \u2192 potential monthly revenue loss.
+        </Callout>
+
+        <div style={{ display: "flex", gap: 8, marginBottom: 0, borderBottom: "1px solid #e8e5df" }}>
+          {Object.entries(scenarios).map(([key, { label }]) => (
+            <Tab key={key} active={activeScenario === key} onClick={() => setActiveScenario(key)}>{label}</Tab>
+          ))}
+        </div>
+
+        <div style={{ background: "#fff", border: "1px solid #e8e5df", borderTop: "none", borderRadius: "0 0 10px 10px", padding: "28px 28px 20px" }}>
+
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", color: "#9b9baa", marginBottom: 8 }}>
+            Top of Funnel: Visitors to Signup Attempts ({scenarios[activeScenario].label} Scenario)
+          </div>
+
+          <TopFunnelBars
+            visitors={s.monthlyVisitors}
+            visitorsFormatted={formatNum(s.monthlyVisitors)}
+            signupAttempts={signupAttempts}
+            signupFormatted={formatNum(signupAttempts)}
+            pct={(s.visitorToSignupAttempt * 100).toFixed(0)}
+            source={`Source: StatShow (~130K). Range: 100K-170K.`}
+          />
+
+          <SignupFlowchart
+            signupAttempts={signupAttempts}
+            signupFormatted={formatNum(signupAttempts)}
+            oauthAttempts={oauthAttempts}
+            oauthFormatted={formatNum(oauthAttempts)}
+            oauthPct={(s.oauthShare * 100).toFixed(0)}
+            manualAttempts={manualAttempts}
+            manualFormatted={formatNum(manualAttempts)}
+            manualPct={((1 - s.oauthShare) * 100).toFixed(0)}
+            manualLost={manualLostToRejection}
+            manualLostFormatted={formatNum(manualLostToRejection)}
+            manualSuccess={manualSuccess}
+            manualSuccessFormatted={formatNum(manualSuccess)}
+            formDropPct={(s.formRejectionRate * 100).toFixed(0)}
+          />
+
+          <div style={{ height: 1, background: "#e8e5df", margin: "20px 0" }} />
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+            <div style={{ background: "#fef2f0", borderRadius: 8, padding: "16px 18px" }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "#c23b22", letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>Lost: OAuth Bug</div>
+              <div style={{ fontSize: 24, fontFamily: "'Courier New', monospace", fontWeight: 700, color: "#c23b22" }}>{formatNum(oauthLost)}</div>
+              <div style={{ fontSize: 13, color: "#9b9baa", marginTop: 4 }}>potential signups/month</div>
+            </div>
+            <div style={{ background: "#fef9ee", borderRadius: 8, padding: "16px 18px" }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "#d97706", letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>Lost: Form Friction</div>
+              <div style={{ fontSize: 24, fontFamily: "'Courier New', monospace", fontWeight: 700, color: "#d97706" }}>{formatNum(manualLostToRejection)}</div>
+              <div style={{ fontSize: 13, color: "#9b9baa", marginTop: 4 }}>potential signups/month</div>
+            </div>
+            <div style={{ background: "#eff6ff", borderRadius: 8, padding: "16px 18px" }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "#2563eb", letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>Successful</div>
+              <div style={{ fontSize: 24, fontFamily: "'Courier New', monospace", fontWeight: 700, color: "#2563eb" }}>{formatNum(manualSuccess)}</div>
+              <div style={{ fontSize: 13, color: "#9b9baa", marginTop: 4 }}>signups/month</div>
+            </div>
+          </div>
+
+          <div style={{ height: 1, background: "#e8e5df", margin: "24px 0" }} />
+
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", color: "#9b9baa", marginBottom: 12 }}>
+            Potential Revenue Impact (OAuth Bug Only)
+          </div>
+          <P style={{ fontSize: 14, color: "#6b6b8a" }}>
+            Path: {formatNum(oauthLost)} lost signups \u00d7 {(s.freemiumToPaid*100).toFixed(1)}% freemium-to-paid = {potentialPaidFromOAuth} potential paid users \u00d7 ${s.avgPaidARPU_monthly}/month ARPU
+          </P>
+          <P style={{ fontSize: 13, color: "#9b9baa" }}>
+            Freemium-to-paid: First Page Sage 2.6%, Guru Startups 2-5%, Databox 3-10%. ARPU: ~$360/month Growth (Ainfluencer). Cross-check: $6.7M / 1,000+ customers \u2248 $558/month avg.
+          </P>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, marginTop: 4 }}>
+            <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: 0.8, textTransform: "uppercase", color: "#9b9baa" }}>Scenario</span>
+            <div style={{ display: "flex", gap: 6 }}>
+              {Object.entries(scenarios).map(([key, { label }]) => (
+                <CompactTab key={key} active={activeScenario === key} onClick={() => setActiveScenario(key)}>{label}</CompactTab>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+              <span style={{ fontSize: 14, fontWeight: 600, color: "#3d3d5c" }}>Estimated Bug Duration</span>
+              <span style={{ fontSize: 22, fontFamily: "'Courier New', monospace", fontWeight: 700, color: "#c23b22" }}>{bugDuration} {bugDuration === 1 ? "month" : "months"}</span>
+            </div>
+            <style>{`
+              .qoruz-slider { -webkit-appearance: none; appearance: none; width: 100%; height: 6px; border-radius: 3px; outline: none; cursor: pointer; background: linear-gradient(to right, #c23b22 0%, #c23b22 var(--slider-pct), #e8e5df var(--slider-pct), #e8e5df 100%); }
+              .qoruz-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; border-radius: 50%; background: #c23b22; border: 3px solid #fff; box-shadow: 0 0 0 2px #c23b22, 0 0 10px rgba(194,59,34,0.4); cursor: pointer; transition: box-shadow 0.2s ease; }
+              .qoruz-slider::-webkit-slider-thumb:hover { box-shadow: 0 0 0 2px #c23b22, 0 0 16px rgba(194,59,34,0.6); }
+              .qoruz-slider::-moz-range-thumb { width: 20px; height: 20px; border-radius: 50%; background: #c23b22; border: 3px solid #fff; box-shadow: 0 0 0 2px #c23b22, 0 0 10px rgba(194,59,34,0.4); cursor: pointer; transition: box-shadow 0.2s ease; }
+              .qoruz-slider::-moz-range-thumb:hover { box-shadow: 0 0 0 2px #c23b22, 0 0 16px rgba(194,59,34,0.6); }
+              .qoruz-slider::-moz-range-track { height: 6px; border-radius: 3px; background: transparent; }
+            `}</style>
+            <input type="range" min={1} max={12} value={bugDuration} onChange={(e) => setBugDuration(Number(e.target.value))} className="qoruz-slider" style={{ "--slider-pct": `${((bugDuration - 1) / 11) * 100}%` }} />
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#9b9baa" }}><span>1 month</span><span>12 months</span></div>
+            <div style={{ fontSize: 13, color: "#7c7c99", marginTop: 6 }}>This is a code-level bug (OAuth callback never generates a reCAPTCHA token). It is not transient. It has been broken since the last deployment that touched this path.</div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 12 }}>
+            <div style={{ border: "2px solid #c23b22", borderRadius: 8, padding: "20px 22px", background: "#fffbfa" }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "#c23b22", letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>Potential Monthly Revenue Loss</div>
+              <div style={{ fontSize: 28, fontFamily: "'Courier New', monospace", fontWeight: 700, color: "#c23b22" }}>{formatUSD(monthlyPotentialRevLoss)}</div>
+              <div style={{ fontSize: 13, color: "#6b6b8a", marginTop: 6, lineHeight: 1.5 }}>
+                {potentialPaidFromOAuth} potential paid users \u00d7 ${s.avgPaidARPU_monthly}/month
+              </div>
+            </div>
+            <div style={{ border: "2px solid #c23b22", borderRadius: 8, padding: "20px 22px", background: "#fffbfa" }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "#c23b22", letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>Cumulative Potential Loss ({bugDuration} mo)</div>
+              <div style={{ fontSize: 28, fontFamily: "'Courier New', monospace", fontWeight: 700, color: "#c23b22" }}>{formatUSD(cumulativeLoss)}</div>
+              <div style={{ fontSize: 13, color: "#6b6b8a", marginTop: 6, lineHeight: 1.5 }}>
+                As % of FY25 annual revenue: {((cumulativeLoss / annualRevenueUSD) * 100).toFixed(2)}%
+              </div>
+            </div>
+          </div>
+
+          <Callout type="caveat">
+            <strong>This is a linear estimate.</strong> SaaS revenue compounds: a user acquired in month 1 pays in months 1 through N. A user lost in month 1 represents the entire customer lifetime value lost, not just one month. This model does not estimate LTV because Qoruz's churn rates are not publicly available. The true long-term cost is likely higher.
+          </Callout>
+        </div>
+
+        {/* ── SCENARIO PARAMETER REASONING ── */}
+        <div style={{ marginTop: 20 }}>
+          <button
+            onClick={() => setShowParamReasoning(!showParamReasoning)}
+            style={{
+              background: "#fff", border: "1px solid #e8e5df", borderRadius: 8, padding: "14px 20px",
+              width: "100%", textAlign: "left", cursor: "pointer", fontSize: 15, fontWeight: 600,
+              color: "#1a1a2e", display: "flex", justifyContent: "space-between", alignItems: "center",
+            }}
+          >
+            <span>Why these specific numbers? Reasoning for every scenario parameter</span>
+            <span style={{ fontSize: 13, color: "#9b9baa" }}>{showParamReasoning ? "Hide \u25BE" : "Show \u25B8"}</span>
+          </button>
+
+          {showParamReasoning && (
+            <div style={{ background: "#fff", border: "1px solid #e8e5df", borderTop: "none", borderRadius: "0 0 8px 8px", padding: "20px 24px" }}>
+              <div style={{ overflowX: "auto" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.5fr 0.5fr 0.5fr 2fr 1fr", gap: 8, padding: "8px 0", borderBottom: "2px solid #e8e5df", marginBottom: 8, minWidth: 800 }}>
+                  {["Parameter", "Conservative", "Moderate", "Aggressive", "Reasoning", "Source"].map((h, i) => (
+                    <span key={i} style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: "#9b9baa" }}>{h}</span>
+                  ))}
+                </div>
+                {paramReasons.map(({ param, values, reasoning, source }, i) => (
+                  <div key={i} style={{ display: "grid", gridTemplateColumns: "1.2fr 0.5fr 0.5fr 0.5fr 2fr 1fr", gap: 8, padding: "12px 0", borderBottom: i < paramReasons.length - 1 ? "1px solid #f0ede8" : "none", alignItems: "start", minWidth: 800 }}>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: "#1a1a2e" }}>{param}</span>
+                    <span style={{ fontSize: 13, fontFamily: "'Courier New', monospace", color: "#2563eb" }}>{values[0]}</span>
+                    <span style={{ fontSize: 13, fontFamily: "'Courier New', monospace", color: "#1a1a2e", fontWeight: 700 }}>{values[1]}</span>
+                    <span style={{ fontSize: 13, fontFamily: "'Courier New', monospace", color: "#d97706" }}>{values[2]}</span>
+                    <span style={{ fontSize: 13, color: "#6b6b8a", lineHeight: 1.6 }}>{reasoning}</span>
+                    <span style={{ fontSize: 12, color: "#9b9baa", lineHeight: 1.5 }}>{source}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </Section>
+
+      {/* ── SECTION 5 ── */}
+      <Section number={5} title="Measuring Whether the Fix Worked">
+        <P>If the OAuth bug is resolved and the manual form UX is improved, these metrics should show measurable movement within the indicated timeframes.</P>
+
+        <div style={{ background: "#fff", border: "1px solid #e8e5df", borderRadius: 10, padding: "20px 24px", marginTop: 12, overflowX: "auto" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1.3fr 120px 130px 120px 80px", gap: 8, padding: "8px 0 10px", borderBottom: "2px solid #e8e5df", marginBottom: 4, minWidth: 620 }}>
+            {["Metric", "Before Fix", "Expected After", "Observable In", "Priority"].map((h, i) => (
+              <span key={i} style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: "#9b9baa", textAlign: i > 0 ? "center" : "left" }}>{h}</span>
+            ))}
+          </div>
+          {[
+            { metric: "OAuth Signup Success Rate", before: "0%", after: "95-99%", timeframe: "Day 1", priority: "Critical", pColor: "#c23b22" },
+            { metric: "Overall Signup Completion Rate", before: "Manual-only baseline", after: "+30-50% lift", timeframe: "Week 1-2", priority: "Critical", pColor: "#c23b22" },
+            { metric: "Signup Page Non-Engaged Session Rate", before: "Elevated (silent failures)", after: "-15-25% reduction", timeframe: "Week 1-2", priority: "Critical", pColor: "#c23b22" },
+            { metric: "New Free Accounts per Week", before: "Current baseline", after: "+25-45% increase", timeframe: "Week 2-4", priority: "High", pColor: "#d97706" },
+            { metric: "Freemium-to-Paid Conversion", before: "Current baseline", after: "Monitor for lift", timeframe: "Month 2-3", priority: "High", pColor: "#d97706" },
+            { metric: "Support Tickets: Signup Failures", before: "Unknown volume", after: "Near zero", timeframe: "Week 1", priority: "Medium", pColor: "#6b6b8a" },
+            { metric: "Agency-Referred Signup Rate", before: "Impaired", after: "Track separately", timeframe: "Month 1-2", priority: "High", pColor: "#d97706" },
+          ].map(({ metric, before, after, timeframe, priority, pColor }, i) => (
+            <div key={i} style={{ display: "grid", gridTemplateColumns: "1.3fr 120px 130px 120px 80px", gap: 8, padding: "12px 0", borderBottom: i < 6 ? "1px solid #f0ede8" : "none", alignItems: "center", minWidth: 620 }}>
+              <span style={{ fontSize: 15, color: "#3d3d5c" }}>{metric}</span>
+              <span style={{ fontSize: 13, fontFamily: "'Courier New', monospace", color: "#c23b22", textAlign: "center" }}>{before}</span>
+              <span style={{ fontSize: 13, fontFamily: "'Courier New', monospace", color: "#0d9488", fontWeight: 600, textAlign: "center" }}>{after}</span>
+              <span style={{ fontSize: 13, color: "#6b6b8a", textAlign: "center" }}>{timeframe}</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: pColor, textAlign: "center" }}>{priority}</span>
+            </div>
+          ))}
+        </div>
+      </Section>
+
+      {/* ── SECTION 6 ── */}
+      <Section number={6} title="What This Model Cannot Capture">
+        <P>Several significant cost categories are structurally invisible from outside. They are listed here because they are real, even if not quantifiable without internal data.</P>
+        {[
+          { title: "Competitive leakage", text: "When a signup fails silently, users search for an alternative. With 391 active competitors (Tracxn), including Kofluence, Upfluence, and GRIN, a failed signup is likely a permanent loss. The model treats lost users as potential revenue. In reality, most are permanently lost." },
+          { title: "Agency relationship damage", text: "Qoruz powers 6 of the top 10 Indian agencies. When an agency refers a client and that client hits a broken, silent flow, it creates a trust fracture at the partnership level." },
+          { title: "Suppressed word-of-mouth", text: "A silently broken signup creates a negative first impression that propagates informally. One failed attempt by a junior marketer becomes a 'Qoruz doesn't work' story that persists long after any fix." },
+          { title: "Compounding LTV loss", text: "SaaS revenue compounds. A user lost in month 1 represents N months of lost revenue, not one. Without churn data, LTV cannot be estimated, but the linear model above is conservative." },
+          { title: "Downstream funnel quality", text: "This model assumes industry-average downstream conversion. Users may encounter onboarding friction, free-plan limitations ('about 10% of capabilities,' Ainfluencer), or pricing mismatches. The potential figures are the upper bound." },
+        ].map(({ title, text }, i) => (
+          <div key={i} style={{ display: "flex", gap: 12, marginBottom: 18 }}>
+            <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#d97706", marginTop: 9, flexShrink: 0 }} />
+            <div>
+              <span style={{ fontSize: 15, fontWeight: 600, color: "#1a1a2e" }}>{title}. </span>
+              <span style={{ fontSize: 15, color: "#3d3d5c", lineHeight: 1.75 }}>{text}</span>
+            </div>
+          </div>
+        ))}
+      </Section>
+
+      {/* ── SECTION 7 ── */}
+      <Section number={7} title="Confidence Summary">
+        <P>Every input carries a different level of certainty. This table summarizes where the model is strong and where it is speculative.</P>
+        <div style={{ background: "#fff", border: "1px solid #e8e5df", borderRadius: 10, padding: "20px 24px", marginTop: 12, overflowX: "auto" }}>
+          {[
+            { input: "OAuth bug: 100% failure rate", conf: "Verified", note: "Reproduced 4 times with root cause documented" },
+            { input: "Annual revenue (~$6.7M, FY25)", conf: "High", note: "Tracxn (MCA filings), cross-referenced with CBInsights, Business Standard, Datrux parent" },
+            { input: "Active customers (1,000+)", conf: "High", note: "Qoruz press release (Business Standard, Jul 2025)" },
+            { input: "Agency penetration (6 of top 10)", conf: "High", note: "BW Marketing World, Apr 2025" },
+            { input: "Growth plan pricing (~$360/month)", conf: "Medium", note: "Ainfluencer review (Oct 2025). Not publicly disclosed." },
+            { input: "Google OAuth share (35-53%)", conf: "Medium", note: "Auth0 and Scalekit industry data" },
+            { input: "Monthly traffic (100K-170K)", conf: "Low", note: "Third-party estimators diverge significantly" },
+            { input: "Freemium-to-paid (2.6-5%)", conf: "Low-Medium", note: "First Page Sage, Guru Startups, Databox benchmarks" },
+            { input: "Bounce rate (45-55%)", conf: "Low-Medium", note: "Daydream/CXL B2B SaaS benchmarks" },
+          ].map(({ input, conf, note }, i) => (
+            <div key={i} style={{ display: "grid", gridTemplateColumns: "1.1fr 100px 1.3fr", gap: 12, padding: "11px 0", borderBottom: i < 8 ? "1px solid #f0ede8" : "none", alignItems: "center", minWidth: 620 }}>
+              <span style={{ fontSize: 15, color: "#3d3d5c" }}>{input}</span>
+              <span style={{
+                fontSize: 12, fontWeight: 600, textAlign: "center", padding: "3px 10px", borderRadius: 100,
+                background: conf === "Verified" ? "#dcfce7" : conf === "High" ? "#eff6ff" : conf === "Medium" ? "#fef9ee" : "#fef2f0",
+                color: conf === "Verified" ? "#166534" : conf === "High" ? "#1e40af" : conf === "Medium" ? "#92400e" : "#991b1b",
+              }}>{conf}</span>
+              <span style={{ fontSize: 13, color: "#9b9baa" }}>{note}</span>
+            </div>
+          ))}
+        </div>
+      </Section>
+
+      {/* ── FOOTER ── */}
+      <div style={{ paddingTop: 24, borderTop: "1px solid #e8e5df", fontSize: 14, color: "#9b9baa", lineHeight: 1.7 }}>
+        <strong style={{ color: "#6b6b8a" }}>Methodology note:</strong> This framework uses a single-pass funnel model with three scenario tiers. Each input is sourced from the most relevant available data (Qoruz-specific where possible, B2B SaaS industry benchmarks where not). All revenue figures are in USD. INR figures from Indian sources are converted at \u20B984/USD. Benchmark sources include Tracxn, CBInsights, Auth0, ChartMogul, First Page Sage, WordStream, OpenView Partners, Guru Startups, Databox, Heap.io, Scalekit, Daydream, CXL, and Business Standard. This document is a companion to the <a href="https://ankurkulkarni90.github.io/qoruz-signup-analysis/" target="_blank" rel="noopener" style={{ color: "#6b6b8a", textDecoration: "none", borderBottom: "1px solid #d0cec8" }}>Qoruz Signup Audit</a>.
+      </div>
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<QoruzFramework />);
+</script>
+</body>
+</html>
